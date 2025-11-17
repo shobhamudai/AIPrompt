@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import 'bootstrap/dist/css/bootstrap.min.css';
 import './App.css';
 
@@ -15,12 +15,18 @@ Amplify.configure({
     }
 });
 
-const API_URL = '/api/prompt';
+const PROMPT_API_URL = '/api/prompt';
+const HISTORY_API_URL = '/api/history';
 
 const App = ({ signOut, user }) => {
     const [prompt, setPrompt] = useState('');
     const [response, setResponse] = useState('');
+    const [history, setHistory] = useState([]);
     const [isLoading, setIsLoading] = useState(false);
+
+    useEffect(() => {
+        fetchHistory();
+    }, []);
 
     const getAuthHeader = async () => {
         try {
@@ -33,6 +39,17 @@ const App = ({ signOut, user }) => {
         }
     };
 
+    const fetchHistory = async () => {
+        try {
+            const headers = await getAuthHeader();
+            const res = await fetch(HISTORY_API_URL, { headers });
+            const data = await res.json();
+            setHistory(data);
+        } catch (error) {
+            console.error('Error fetching history:', error);
+        }
+    };
+
     const handlePromptSubmit = async (event) => {
         event.preventDefault();
         if (!prompt.trim()) return;
@@ -41,13 +58,15 @@ const App = ({ signOut, user }) => {
 
         try {
             const headers = { 'Content-Type': 'application/json', ...(await getAuthHeader()) };
-            const res = await fetch(API_URL, {
+            const res = await fetch(PROMPT_API_URL, {
                 method: 'POST',
                 headers,
                 body: JSON.stringify({ prompt })
             });
             const data = await res.json();
             setResponse(data.response);
+            // Refresh history after a new prompt
+            fetchHistory();
         } catch (error) {
             console.error('Error submitting prompt:', error);
             setResponse('Error: Could not get a response from the server.');
@@ -55,6 +74,8 @@ const App = ({ signOut, user }) => {
             setIsLoading(false);
         }
     };
+
+    const formatTimestamp = (epoch) => epoch ? new Date(epoch).toLocaleString() : 'N/A';
 
     return (
         <div className="container mt-4">
@@ -85,13 +106,32 @@ const App = ({ signOut, user }) => {
             </div>
 
             {response && (
-                <div className="card shadow-sm">
+                <div className="card shadow-sm mb-4">
                     <div className="card-body">
-                        <h5 className="card-title">Response</h5>
+                        <h5 className="card-title">Current Response</h5>
                         <p className="card-text">{response}</p>
                     </div>
                 </div>
             )}
+
+            <div className="card shadow-sm">
+                <div className="card-body">
+                    <h5 className="card-title">Chat History</h5>
+                    {history.length > 0 ? (
+                        <ul className="list-group list-group-flush">
+                            {history.map((item, index) => (
+                                <li key={index} className="list-group-item">
+                                    <p><strong>You:</strong> {item.prompt}</p>
+                                    <p><strong>AI:</strong> {item.response}</p>
+                                    <small className="text-muted">{formatTimestamp(item.createdAt)}</small>
+                                </li>
+                            ))}
+                        </ul>
+                    ) : (
+                        <p>No history yet.</p>
+                    )}
+                </div>
+            </div>
         </div>
     );
 };

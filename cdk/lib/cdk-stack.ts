@@ -8,6 +8,7 @@ import * as cloudfront from 'aws-cdk-lib/aws-cloudfront';
 import * as origins from 'aws-cdk-lib/aws-cloudfront-origins';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as cognito from 'aws-cdk-lib/aws-cognito';
+import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import * as path from 'path';
 
 export class AIPromptStack extends cdk.Stack {
@@ -32,6 +33,15 @@ export class AIPromptStack extends cdk.Stack {
         userPool: userPool,
     });
 
+    // --- DATABASE RESOURCES ---
+    const chatHistoryTable = new dynamodb.Table(this, 'ChatHistoryTable', {
+      tableName: 'AIPromptChatHistory',
+      partitionKey: { name: 'userId', type: dynamodb.AttributeType.STRING },
+      sortKey: { name: 'createdAt', type: dynamodb.AttributeType.NUMBER },
+      billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+    });
+
     // --- BACKEND RESOURCES ---
     const repository = new ecr.Repository(this, 'AIPromptAppRepository', {
       repositoryName: 'ai-prompt-app-backend',
@@ -47,22 +57,37 @@ export class AIPromptStack extends cdk.Stack {
       memoryLimitMiB: 512,
       desiredCount: 1,
       taskImageOptions: {
-        // Reverted: Use a local asset. CDK will build and push this image.
         image: ecs.ContainerImage.fromAsset(path.resolve(__dirname, '../../backend')),
         containerPort: 8080,
         environment: {
           SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI: `https://cognito-idp.${this.region}.amazonaws.com/${userPool.userPoolId}`,
+          CHAT_HISTORY_TABLE_NAME: chatHistoryTable.tableName,
         },
       },
       publicLoadBalancer: true,
       healthCheckGracePeriod: cdk.Duration.seconds(150),
     });
 
-    // Add Bedrock permissions to the task role
-    fargateService.taskDefinition.addToTaskRolePolicy(new iam.PolicyStatement({
-      actions: ['bedrock:InvokeModel'],
-      resources: ['*'], // For production, you might want to restrict this to specific model ARNs
-    }));
+    // Grant backend permissions
+    chatHistoryTable.grantReadWriteData(fargateService.taskDefinition.taskRole);
+
+    const bedrockAndMarketplacePolicy = new iam.PolicyStatement({
+      actions: [
+        'bedrock:InvokeModel',
+        'aws-marketplace:ViewSubscriptions',
+        'aws-marketplace:Subscribe'
+      ],
+      resources: ['*'], // These actions are not resource-specific
+    });
+
+    // Add permissions to the Task Role
+    fargateService.taskDefinition.taskRole.addToPrincipalPolicy(bedrockAndMarketplacePolicy);
+
+    // Add permissions to the Execution Role, if it exists
+    if (fargateService.taskDefinition.executionRole) {
+      fargateService.taskDefinition.executionRole.addToPrincipalPolicy(bedrockAndMarketplacePolicy);
+    }
+
 
     fargateService.targetGroup.configureHealthCheck({
       path: '/actuator/health',
