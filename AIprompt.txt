@@ -1,0 +1,19 @@
+AIPromptStack.AIPromptFargateServiceLoadBalancerDNSA7908863 = AIProm-AIPro-BT3TZPwIy6hJ-22287381.us-east-1.elb.amazonaws.com
+AIPromptStack.AIPromptFargateServiceServiceURL842B166C = http://AIProm-AIPro-BT3TZPwIy6hJ-22287381.us-east-1.elb.amazonaws.com
+AIPromptStack.CloudFrontDistributionDomainName = d3rb5nebdt9sxk.cloudfront.net
+AIPromptStack.CloudFrontDistributionId = E2BR6XU4F6AG9U
+AIPromptStack.EcrRepositoryUri = 150239773922.dkr.ecr.us-east-1.amazonaws.com/ai-prompt-app-backend
+AIPromptStack.FrontendBucketName = aipromptstack-aipromptwebsitebucket7952f67d-w5bloz6fn4hv
+AIPromptStack.LoadBalancerDNS = AIProm-AIPro-BT3TZPwIy6hJ-22287381.us-east-1.elb.amazonaws.com
+AIPromptStack.UserPoolClientId = 15ira3jfoaea6ehhbjkkr46op3
+AIPromptStack.UserPoolId = us-east-1_G31aVhmlL
+
+
+aws s3 sync build/ s3://aipromptstack-aipromptwebsitebucket7952f67d-w5bloz6fn4hv
+
+
+aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin 150239773922.dkr.ecr.us-east-1.amazonaws.com/ai-prompt-app-backend
+
+docker tag ai-prompt-backend:latest 150239773922.dkr.ecr.us-east-1.amazonaws.com/ai-prompt-app-backend:latest
+
+docker push 150239773922.dkr.ecr.us-east-1.amazonaws.com/ai-prompt-app-backend:latest
