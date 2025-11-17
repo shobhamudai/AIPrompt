@@ -44,7 +44,7 @@ const App = ({ signOut, user }) => {
             const headers = await getAuthHeader();
             const res = await fetch(HISTORY_API_URL, { headers });
             const data = await res.json();
-            setHistory(data);
+            setHistory(data.sort((a, b) => b.createdAt - a.createdAt));
         } catch (error) {
             console.error('Error fetching history:', error);
         }
@@ -65,13 +65,31 @@ const App = ({ signOut, user }) => {
             });
             const data = await res.json();
             setResponse(data.response);
-            // Refresh history after a new prompt
             fetchHistory();
         } catch (error) {
             console.error('Error submitting prompt:', error);
             setResponse('Error: Could not get a response from the server.');
         } finally {
             setIsLoading(false);
+        }
+    };
+
+    const handleHistoryClick = (item) => {
+        setPrompt(item.prompt);
+        setResponse(item.response);
+    };
+
+    const handleDelete = async (createdAt) => {
+        try {
+            const headers = await getAuthHeader();
+            await fetch(`${HISTORY_API_URL}/${createdAt}`, {
+                method: 'DELETE',
+                headers,
+            });
+            // Remove the deleted item from the local state
+            setHistory(history.filter(item => item.createdAt !== createdAt));
+        } catch (error) {
+            console.error('Error deleting history item:', error);
         }
     };
 
@@ -119,11 +137,22 @@ const App = ({ signOut, user }) => {
                     <h5 className="card-title">Chat History</h5>
                     {history.length > 0 ? (
                         <ul className="list-group list-group-flush">
-                            {history.map((item, index) => (
-                                <li key={index} className="list-group-item">
-                                    <p><strong>You:</strong> {item.prompt}</p>
-                                    <p><strong>AI:</strong> {item.response}</p>
-                                    <small className="text-muted">{formatTimestamp(item.createdAt)}</small>
+                            {history.map((item) => (
+                                <li key={item.createdAt} className="list-group-item">
+                                    <div onClick={() => handleHistoryClick(item)} style={{cursor: 'pointer'}}>
+                                        <p className="mb-1"><strong>You:</strong> {item.prompt}</p>
+                                        <p className="mb-1"><strong>AI:</strong> {item.response}</p>
+                                        <small className="text-muted">{formatTimestamp(item.createdAt)}</small>
+                                    </div>
+                                    <button 
+                                        className="btn btn-danger btn-sm mt-2"
+                                        onClick={(e) => {
+                                            e.stopPropagation(); // Prevent the click from triggering handleHistoryClick
+                                            handleDelete(item.createdAt);
+                                        }}
+                                    >
+                                        Delete
+                                    </button>
                                 </li>
                             ))}
                         </ul>

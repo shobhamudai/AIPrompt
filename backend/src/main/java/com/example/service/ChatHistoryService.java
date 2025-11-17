@@ -27,4 +27,8 @@ public class ChatHistoryService {
     public List<ChatMessage> getHistoryForUser(String userId) {
         return chatHistoryDao.getHistoryForUser(userId);
     }
+
+    public void deleteMessage(String userId, Long createdAt) {
+        chatHistoryDao.deleteMessage(userId, createdAt);
+    }
 }

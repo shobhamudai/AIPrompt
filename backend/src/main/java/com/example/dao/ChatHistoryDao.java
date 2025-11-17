@@ -33,4 +33,12 @@ public class ChatHistoryDao {
 
         return chatHistoryTable.query(request).items().stream().toList();
     }
+
+    public void deleteMessage(String userId, Long createdAt) {
+        Key key = Key.builder()
+                .partitionValue(userId)
+                .sortValue(createdAt)
+                .build();
+        chatHistoryTable.deleteItem(key);
+    }
 }
