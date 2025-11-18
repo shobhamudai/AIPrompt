@@ -14,6 +14,7 @@ public class BedrockService {
 
     private final BedrockRuntimeClient bedrockClient;
 
+    // Constructor for Spring to auto-wire
     public BedrockService() {
         this.bedrockClient = BedrockRuntimeClient.builder()
                 .region(Region.US_EAST_1)
@@ -21,9 +22,13 @@ public class BedrockService {
                 .build();
     }
 
+    // Constructor for testing
+    public BedrockService(BedrockRuntimeClient bedrockClient) {
+        this.bedrockClient = bedrockClient;
+    }
+
     public String getCompletion(String prompt) {
         try {
-            // FIX: Update to a current, supported model ID
             String modelId = "anthropic.claude-3-sonnet-20240229-v1:0";
             
             JSONObject content = new JSONObject();

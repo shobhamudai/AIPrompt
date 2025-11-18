@@ -25,6 +25,29 @@ This project is a full-stack AI-powered application. The backend is a Java Sprin
 
 ---
 
+## Running Unit Tests and Code Coverage
+
+The backend module includes a suite of unit tests for services and controllers. The project uses JaCoCo to generate code coverage reports.
+
+### Step 1: Run the Tests
+
+1.  Navigate to the `backend` directory.
+2.  Run the Maven `test` command. This will execute all unit tests and generate the coverage data.
+
+    ```bash
+    cd backend
+    mvn clean test
+    ```
+
+### Step 2: View the Coverage Report
+
+1.  After the tests complete, open the generated HTML report in your browser.
+2.  The report is located at `backend/target/site/jacoco/index.html`.
+
+This interactive report provides a detailed breakdown of test coverage for each class and method.
+
+---
+
 ## Deployment Guide
 
 This guide covers the first-time deployment for all parts of the application.
