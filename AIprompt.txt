@@ -17,3 +17,9 @@ aws ecr get-login-password --region us-east-1 | docker login --username AWS --pa
 docker tag ai-prompt-backend:latest 150239773922.dkr.ecr.us-east-1.amazonaws.com/ai-prompt-app-backend:latest
 
 docker push 150239773922.dkr.ecr.us-east-1.amazonaws.com/ai-prompt-app-backend:latest
+
+
+
+aws cloudfront create-invalidation --distribution-id E2BR6XU4F6AG9U --paths "/*"
+
+aws ecs update-service --cluster <CLUSTER_NAME> --service <SERVICE_NAME> --force-new-deployment

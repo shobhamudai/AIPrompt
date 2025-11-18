@@ -4,8 +4,9 @@ This project is a full-stack AI-powered application. The backend is a Java Sprin
 
 ## Architecture
 
-- **Backend**: A Spring Boot application running in a Docker container, managed by ECS with Fargate. It takes user prompts and communicates with Amazon Bedrock to get AI-generated responses.
+- **Backend**: A Spring Boot application running in a Docker container, managed by ECS with Fargate. It takes user prompts, communicates with Amazon Bedrock, and saves conversations to DynamoDB.
 - **Frontend**: A React single-page application (SPA) hosted in an S3 bucket.
+- **Database**: Amazon DynamoDB stores the chat history for each user.
 - **API**: An Application Load Balancer (ALB) routes traffic to the backend ECS service.
 - **CDN**: Amazon CloudFront serves the frontend content from S3 for low-latency access.
 - **AI Service**: Amazon Bedrock provides the generative AI capabilities.
@@ -20,121 +21,109 @@ This project is a full-stack AI-powered application. The backend is a Java Sprin
 - **Node.js and npm**: For running the AWS CDK and the frontend application.
 - **AWS CDK Toolkit**: `npm install -g aws-cdk`
 - **Java 17+ & Maven**: For building the backend application.
-- **Docker**: For building and publishing the backend container image.
+- **Docker**: For building and publishing the backend container image. Docker must be running on your machine for deployment.
 
 ---
 
 ## Deployment Guide
 
-Follow these steps to deploy the entire application.
+This guide covers the first-time deployment for all parts of the application.
 
-### 1. Deploy the Infrastructure with AWS CDK
+### Step 1: Configure the Frontend
 
-First, navigate to the `cdk` directory to deploy the necessary AWS resources.
+Before deploying, you need to create a configuration file for the frontend.
 
-```bash
-# Navigate to the cdk directory
-cd cdk
+1.  Navigate to the `frontend` directory: `cd frontend`
+2.  Create a new file named `src/config.js`.
+3.  Copy the following content into `src/config.js`. You will fill in the values after the first infrastructure deployment.
 
-# Install dependencies
-npm install
+    ```javascript
+    // Replace the placeholder values after the first CDK deployment
+    export const cognitoConfig = {
+        userPoolId: 'YOUR_USER_POOL_ID',
+        userPoolClientId: 'YOUR_USER_POOL_CLIENT_ID',
+        region: 'YOUR_AWS_REGION'
+    };
+    ```
 
-# Bootstrap your AWS environment for CDK (only needs to be done once per region)
-cdk bootstrap
+### Step 2: Deploy the Backend and Infrastructure
 
-# Deploy the stack
-cdk deploy
-```
+There are two ways to deploy the backend: the automated method (recommended) and a manual alternative if you encounter network issues.
 
-This command will provision all the required resources. After it completes, **copy the outputs** from your terminal into a text file. You will need these values for the next steps.
+#### Option A: Automated Deployment (Recommended)
 
-### 2. Configure and Deploy the Frontend
+This single command builds the backend Java code, builds the Docker image, pushes it to AWS ECR, and deploys all the necessary AWS infrastructure (ECS, DynamoDB, Cognito, etc.).
 
-Set up the React application to communicate with your new backend and authentication service.
+1.  **Build the backend code:**
+    ```bash
+    # Navigate to the backend directory
+    cd backend
+    mvn clean package
+    ```
 
-```bash
-# Navigate to the frontend directory
-cd ../frontend
+2.  **Deploy with CDK:**
+    ```bash
+    # Navigate to the cdk directory
+    cd ../cdk
+    npm install
+    cdk deploy
+    ```
+    The `cdk deploy` command will automatically find your packaged backend, build the Docker image, and publish it for you.
 
-# Install dependencies
-npm install
-```
+#### Option B: Manual Backend Deployment
 
-Next, create a configuration file `src/config.js` and populate it with the outputs from the CDK deployment.
+Use this option if `cdk deploy` fails during the "publishing asset" phase due to network proxies or other connection issues.
 
-**Create `frontend/src/config.js` with the following content:**
+1.  **Deploy the CDK stack first (without the backend):**
+    This is necessary to create the ECR repository where you will push your image.
+    ```bash
+    # Navigate to the cdk directory
+    cd cdk
+    npm install
+    # You may need to temporarily modify the CDK stack to use a placeholder image
+    # to get the initial infrastructure deployed.
+    cdk deploy 
+    ```
 
-```javascript
-// Replace the placeholder values with the actual outputs from your CDK deployment
-export const cognitoConfig = {
-    userPoolId: 'YOUR_USER_POOL_ID',
-    userPoolClientId: 'YOUR_USER_POOL_CLIENT_ID',
-    region: 'YOUR_AWS_REGION'
-};
-```
+2.  **Manually Build and Push the Docker Image:**
+    ```bash
+    # Navigate to the backend directory
+    cd ../backend
+    mvn clean package
 
-Now, build the frontend application and sync it to the S3 bucket.
+    # Log Docker into your AWS ECR repository
+    # Replace <REGION> and <EcrRepositoryUri> with the outputs from the CDK deployment
+    aws ecr get-login-password --region <REGION> | docker login --username AWS --password-stdin <EcrRepositoryUri>
 
-```bash
-# Build the React application
-npm run build
-
-# Sync the build directory to the S3 bucket
-# Replace <FrontendBucketName> with the 'FrontendBucketName' output from the CDK deployment
-aws s3 sync build/ s3://<FrontendBucketName>
-```
-
-### 3. Build and Deploy the Backend
-
-Finally, build and push the container image for your Spring Boot application.
-
-```bash
-# Navigate to the backend directory
-cd ../backend
-
-# Build the Java application
-mvn clean package
-
-# Log Docker into your AWS ECR repository
-# Replace <REGION> and <EcrRepositoryUri> with the outputs from the CDK deployment
-aws ecr get-login-password --region <REGION> | docker login --username AWS --password-stdin <EcrRepositoryUri>
-
-# Build the Docker image
-docker build -t ai-prompt-backend .
-
-# Tag the image for the ECR repository
-docker tag ai-prompt-backend:latest <EcrRepositoryUri>:latest
-
-# Push the image to ECR
-docker push <EcrRepositoryUri>:latest
-```
-
-Once the image is pushed, the ECS service will automatically pull it and start the backend task. Your application is now fully deployed! You can access it via the `CloudFrontDistributionDomainName` from the CDK outputs.
-
----
-
-## How to Update the Application
-
-### Updating the Backend
-
-If you change the backend Java code, you must rebuild and redeploy the container.
-
-1.  **Build the application**: `cd backend && mvn clean package`
-2.  **Build and push the new Docker image**: Follow step 3 from the deployment guide to build and push the new image to ECR.
-3.  **Force a new deployment**: To make ECS pull the latest image, run the following command. You can get the cluster and service names from the CDK outputs or the AWS console.
-
+    # Build, tag, and push the image
+    docker build -t ai-prompt-backend .
+    docker tag ai-prompt-backend:latest <EcrRepositoryUri>:latest
+    docker push <EcrRepositoryUri>:latest
+    ```
+3.  **Force a New Deployment in ECS:**
+    After pushing the image, you must tell the ECS service to pull the new version.
     ```bash
     aws ecs update-service --cluster <CLUSTER_NAME> --service <SERVICE_NAME> --force-new-deployment
     ```
 
-### Updating the Frontend
+### Step 3: Finalize Frontend Configuration and Deployment
 
-If you change the frontend React code, you must rebuild, redeploy to S3, and invalidate the CloudFront cache.
+1.  **Update `frontend/src/config.js`:**
+    After `cdk deploy` completes, it will print output values. Copy the `UserPoolId`, `UserPoolClientId`, and your AWS `region` into the `frontend/src/config.js` file you created earlier.
 
-1.  **Build the application**: `cd frontend && npm run build`
-2.  **Sync to S3**: `aws s3 sync build/ s3://<FrontendBucketName>`
-3.  **Invalidate CloudFront Cache**: This ensures users get the latest version of your site.
-
+2.  **Build and Deploy the Frontend:**
     ```bash
+    # Navigate to the frontend directory
+    cd ../frontend
+    npm install
+    npm run build
+
+    # Sync the build directory to the S3 bucket
+    # Replace <FrontendBucketName> with the output from the CDK deployment
+    aws s3 sync build/ s3://<FrontendBucketName>
+
+    # Invalidate the CloudFront cache to ensure users get the latest version
     aws cloudfront create-invalidation --distribution-id <CloudFrontDistributionId> --paths "/*"
     ```
+
+Your application is now fully deployed! Access it via the `CloudFrontDistributionDomainName` from the CDK outputs.
